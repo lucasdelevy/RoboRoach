@@ -1,0 +1,40 @@
+[[How to install it?]]
+
+It's probably installed already, but in case it's not:
+- Insert Polaris CD
+- $ cd /media/needle/PolarisCD4.005.007/Linux/ToolBox
+- $ ./install.sh
+
+If it doesn't work, you're probably lacking some 32 bit libs.
+- $ sudo -i
+- $ cd /etc/apt/sources.list.d
+- $ echo "deb http://old-releases.ubuntu.com/ubuntu/ raring main restricted universe multiverse" >ia32-libs-raring.list
+- $ apt-get update
+- $ apt-get install ia32-libs
+
+Then run it again:
+- $ ./install.sh
+- Follow the installation wizard
+- Keep the Desktop icons
+
+[[How to run it?]]
+1) Plug everything together.
+- Dark box with power
+- Dark box with PC
+- Dark box with Polaris
+- Plug also two active tags.
+2) Turn it on
+3) Wait until Polaris LEDs stop blinking
+4) At this point, all LEDs must be green (except for active markers)
+5) If you try to run it right now, nothing happens. Sudo do it, two ways:
+- $ sudo nautilus
+- Navigate until Desktop icons
+- Run it
+or
+- $ sudo /bin/sh "/home/needle/NDIToolBox/XXXXX", XXXXX = Capture, Config, Track
+
+[[How to run the driver?]]
+The driver is found here (http://sourceforge.net/p/polarisdriver/code/ci/master/tree/scripts/)
+But it's also in ~/Desktop/Polaris/polaris_api.py. So:
+- $ sudo python ~/Desktop/Polaris/polaris_api.py
+At this point specifically you'll need both markers (as the code is written)

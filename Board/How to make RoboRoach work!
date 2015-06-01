@@ -1,0 +1,127 @@
+We'll use Python and Gattlib to make it work. Let's install it first: https://bitbucket.org/OscarAcena/pygattlib
+$ sudo nano /etc/apt/source.list
+Add "deb http://babel.esi.uclm.es/arco sid main"
+$ sudo apt-get update
+
+If the following error shows up:
+
+"...
+Fetched 1'931 kB in 4s (448 kB/s)
+Reading package lists... Done
+W: GPG error: http://babel.esi.uclm.es sid InRelease: The following signatures couldn't be verified because the public key is not available: NO_PUBKEY E50C***..."
+
+Run:
+$ wget -qO - http://babel.esi.uclm.es/arco/key.asc | sudo apt-key add -
+
+And continue:
+$ sudo apt-get install python3-gattlib python-gattlib
+
+Now you can run the examples at the first url!
+$ sudo python discovery.py
+$ sudo python read_data_assync.py
+
+Now we have it installed, let's explore its Services, Characteristics and Attributes! We'll use hcitool, hciconfig and gatttool, so make sure it's installed.
+$ hcitool -v
+$ hciconfig -v
+$ gatttool -v
+
+Let's sorta follow this: http://blog.firszt.eu/index.php?post/2015/02/08/Bluetooth-BLE%2C-gatttool-and-%28almost%29-all-those-numbers-....-explained
+Using data from this: https://github.com/BackyardBrains/RoboRoach/blob/22bab8ef06a3f0a31e7d5b8e7aa8298ed8b0e90d/Firmware/TI/Source/roboroach_profile.h
+
+Let's first find out our dongle name:
+$ hciconfig
+
+We'll have something like that:
+"hci0:	Type: BR/EDR  Bus: USB
+	BD Address: 5C:F3:70:68:BF:97  ACL MTU: 1021:8  SCO MTU: 64:1
+	UP RUNNING PSCAN 
+	RX bytes:6842 acl:142 sco:0 events:380 errors:0
+	TX bytes:5352 acl:163 sco:0 commands:153 errors:0"
+
+It's hci0. Cool. We'll need this.
+
+$ sudo hciconfig hci0 up
+$ sudo hcitool -i hci0 lescan
+
+This will show up:
+"LE Scan ...
+90:59:AF:14:08:E8 (unknown)
+90:59:AF:14:08:E8 RoboRoach"
+
+Ctrl-C so it will stop and save this MAC address: 90:59:AF:14:08:E8
+
+Now let's connect to it!
+
+$ sudo gatttool -i hci0 -b 90:59:AF:14:08:E8 -I
+(Check gatttool -h to understand what each flag means!)
+
+Now we're almost inside the RoboRoach. Let's connect!
+
+[   ][90:59:AF:14:08:E8][LE]> connect
+(Never forget to push RoboRoach's button so it's visible!)
+
+Something like this will show up from now on:
+"[CON][90:59:AF:14:08:E8][LE]>"
+
+So let's find out which are the services inside it:
+[CON][90:59:AF:14:08:E8][LE]> primary
+
+This will show up:
+"[CON][90:59:AF:14:08:E8][LE]> 
+attr handle: 0x0001, end grp handle: 0x000b uuid: 00001800-0000-1000-8000-00805f9b34fb
+attr handle: 0x000c, end grp handle: 0x000f uuid: 00001801-0000-1000-8000-00805f9b34fb
+attr handle: 0x0010, end grp handle: 0x0022 uuid: 0000180a-0000-1000-8000-00805f9b34fb
+attr handle: 0x0023, end grp handle: 0x0027 uuid: 0000180f-0000-1000-8000-00805f9b34fb
+attr handle: 0x0028, end grp handle: 0xffff uuid: 0000b2b0-0000-1000-8000-00805f9b34fb"
+
+Pay close attention to the last UUID. Those UUID represent services. From RoboRoach's Repository, we find:
+"#define ROBOROACH_SERV_UUID                  0xB2B0"
+
+That's the last UUID! Let's read this UUID characteristics, then!
+[CON][90:59:AF:14:08:E8][LE]> characteristics 0x0028
+(0x0028 is the handle you use to access the UUID, get it?)
+
+Something like this will show up:
+"[CON][90:59:AF:14:08:E8][LE]> 
+handle: 0x0029, char properties: 0x0a, char value handle: 0x002a, uuid: 0000b2b1-0000-1000-8000-00805f9b34fb
+handle: 0x002c, char properties: 0x0a, char value handle: 0x002d, uuid: 0000b2b2-0000-1000-8000-00805f9b34fb
+handle: 0x002f, char properties: 0x0a, char value handle: 0x0030, uuid: 0000b2b3-0000-1000-8000-00805f9b34fb
+handle: 0x0032, char properties: 0x0a, char value handle: 0x0033, uuid: 0000b2b4-0000-1000-8000-00805f9b34fb
+handle: 0x0035, char properties: 0x08, char value handle: 0x0036, uuid: 0000b2b5-0000-1000-8000-00805f9b34fb
+handle: 0x0038, char properties: 0x08, char value handle: 0x0039, uuid: 0000b2b6-0000-1000-8000-00805f9b34fb
+handle: 0x003b, char properties: 0x0a, char value handle: 0x003c, uuid: 0000b2b7-0000-1000-8000-00805f9b34fb
+handle: 0x003e, char properties: 0x0a, char value handle: 0x003f, uuid: 0000b2b8-0000-1000-8000-00805f9b34fb
+handle: 0x0041, char properties: 0x0a, char value handle: 0x0042, uuid: 0000b2b9-0000-1000-8000-00805f9b34fb
+handle: 0x0044, char properties: 0x0a, char value handle: 0x0045, uuid: 0000b2ba-0000-1000-8000-00805f9b34fb
+handle: 0x0047, char properties: 0x0a, char value handle: 0x0048, uuid: 0000b2bb-0000-1000-8000-00805f9b34fb
+handle: 0x004a, char properties: 0x0a, char value handle: 0x004b, uuid: 0000b2bc-0000-1000-8000-00805f9b34fb
+handle: 0x004d, char properties: 0x0a, char value handle: 0x004e, uuid: 0000b2bd-0000-1000-8000-00805f9b34fb"
+
+Lots of UUIDs! Each of this UUID represent a characteristic. Turn right, left, frequency, pulse width, each of these is a characteristic.
+So which one is "turn right"? From the Repository, again:
+
+"#define ROBOROACH_CHAR_STIMULATE_LEFT_UUID   0xB2B5"
+(Remember: stimulate left electrode to turn right!)
+
+OK, we have the UUID. We're real close now. Let's write on the characteristic's attribute! Probably a "1" will be enough to activate it.
+
+[CON][90:59:AF:14:08:E8][LE]> char-write-cmd 0x0036 0x1
+(It's saying: write the following char onto the 0x0036 handle: "0x1")
+
+The left stimulation LED will blink! And that's pretty much it. :)
+
+Now mess with the other UUIDs: change pulse width, frequency, stimulate right, left. We can even write a python program:
+
+"from gattlib import GATTRequester
+import time
+
+# Send: 0xB2B5 for left
+# Send: 0xB2B6 for right
+
+req = GATTRequester("90:59:AF:14:08:E8")
+
+req.write_by_handle(0x0036, str(bytearray([1])))
+time.sleep(1);
+req.write_by_handle(0x0039, str(bytearray([1])))"
+
+Hope that helped!
