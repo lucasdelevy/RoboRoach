@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
 """
-Polaris Spectra API for Ubuntu 12.04 LTS, tested only on revision G001.005
+Polaris/RoboRoach API for Ubuntu 14.04 LTS
 
-# Copyright (c) 2013
+# Copyright (c) 2015
 # Automation and Robotics Lab (LARA) at University of Brasilia (UnB)
 #
 # Redistribution and use in source and binary forms, with or without
@@ -38,87 +38,66 @@ Polaris Spectra API for Ubuntu 12.04 LTS, tested only on revision G001.005
 ##############################################################################
 #                                IMPORTS
 ##############################################################################
+from gattlib import GATTRequester
+import time
+
 import serial
-#import time
 import struct
+
+import sys
+from select import select as sel
 
 ##############################################################################
 #                                AUTHORSHIP
 ##############################################################################
 
-__author__  = "Murilo M. Marinho"
-__email__   = "murilomarinho@lara.unb.br"
+__author__  = "Lucas de Levy O.", "Murilo M. Marinho"
+__email__   = "lucasdelevy@lara.unb.br", "murilomarinho@lara.unb.br"
 __license__ = "LGPL"
 
 ##############################################################################
-#                            MAIN ROUTINE (FOR TESTING)
+#                            CLASS RoboRoach
 ##############################################################################
 
-def main():
+class RoboRoach:
 
-  # Initialize PolarisDriver object
-  polaris_driver = PolarisDriver(port='/dev/ttyUSB0')  
+  #######################
+  #  API Constants
+  #######################
 
-  print 'Opening serial port...'
-  polaris_driver.open()
-  print 'Serial port OK.'
+  ROBOROACH_FREQUENCY_HANDLE  = 0x002A
+  ROBOROACH_PULSE_WIDTH       = 0x002cD
+  ROBOROACH_NUM_PULSES        = 0x0030
+  ROBOROACH_RANDOM_MODE       = 0x0033
+  ROBOROACH_RIGHT_HANDLE      = 0x0036
+  ROBOROACH_LEFT_HANDLE       = 0x0039
+  ROBOROACH_GAIN              = 0x003C
+  ROBOROACH_FREQ_MIN          = 0x003F
+  ROBOROACH_FREQ_MAX          = 0x0042
+  ROBOROACH_PW_MIN            = 0x0045
+  ROBOROACH_PW_MAX            = 0x0048
+  ROBOROACH_GAIN_MIN          = 0x004B
+  ROBOROACH_GAIN_MAX          = 0x004E
 
-  #print '\nTry to change serial parameters...'
-  #polaris_driver.comm('4','0','0','0','0')
-  #time.sleep(1)
-  #polaris_driver.serial.baudrate = 57600
+  #######################
+  #  CONSTRUCTOR
+  #######################
 
-  print '\nInitializing system...'
-  print '\nRequesting APIREV...'
-  print polaris_driver._apirev()
+  def __init__(self, mac_address):
+    self.mac_address = mac_address
+    self.req = GATTRequester(mac_address)
 
-  print '\nRequesting number of active tool ports'
-  response = polaris_driver._sflist('01')
-  print response[:1]
+  #######################
+  #  COMMON FUNCTIONS
+  #######################
 
-  try:
-    polaris_driver.init()
-  except CommandError as e:
-    print 'Error initalizing, exiting...'
-    print e
-    polaris_driver.close()
-    return
-
-  print '\nObtaining PortHandles...'
-  try:
-    polaris_driver.assignPortHandleAll()
-  except CommandError as e:
-    print e
-    polaris_driver.close()
-    return
-  print polaris_driver.port_handler
-
-  print '\nInitializing PortHandles...'
-  polaris_driver.initPortHandleAll()
-  print polaris_driver.port_handler
-
-  print '\nEnabling tool porthandle...'
-  print polaris_driver.enablePortHandle(polaris_driver.port_handler.handles[1],polaris_driver.PENA_TTPRIO_DYNAMIC)
-  print polaris_driver.enablePortHandle(polaris_driver.port_handler.handles[2],polaris_driver.PENA_TTPRIO_DYNAMIC)
-  print polaris_driver.port_handler
-
-  print '\nStarting tracking mode...'
-  polaris_driver.startTracking(polaris_driver.TSTART_RESET_FRAMECOUNT)
-  print 'Tracking mode started successfully.'
-
-  for i in range(10):
-    print polaris_driver.getToolTransformations()
-    polaris_driver._beep(1)
-    print ''
-
-  print '\nStop tracking mode...'
-  polaris_driver.stopTracking()
-  print 'Tracking mode started successfully.'
-
-  print 'Closing serial port...'
-  polaris_driver.close()
-  print 'End.'
-
+  def _turn(self, direction):
+    if direction == 'right':
+      self.req.write_by_handle(self.ROBOROACH_LEFT_HANDLE, str(bytearray([1])))
+    elif direction == 'left':
+      self.req.write_by_handle(self.ROBOROACH_RIGHT_HANDLE, str(bytearray([1])))
+    else:
+      print "Unknown direction"
 
 ##############################################################################
 #                            CLASS PortHandler
@@ -190,7 +169,6 @@ class Tool:
     self.trans.x=x
     self.trans.y=y
     self.trans.z=z
-    
 
 class Translation:
   def __init__(self,x=0.0,y=0.0,z=0.0):
@@ -271,6 +249,46 @@ class PolarisDriver:
 
   def stopTracking(self):
     return self._tstop()
+
+  def getPositionFromBX(self, reply_option):
+    bx_data = self.BX(reply_option).encode('hex')
+    # print bx_data
+    bx_data = bx_data[42:66]
+
+    def stringSwap(str_to_swap):
+      '''Method used to swap the data endian'''
+      size = len(str_to_swap)/2
+      ret_str = ''
+      for i in range(size):
+        ret_str = str_to_swap[:2] + ret_str
+        str_to_swap = str_to_swap[2:]
+      return ret_str
+
+    x_str = bx_data[:8]
+    bx_data = bx_data[8:]
+    y_str = bx_data[:8]
+    bx_data = bx_data[8:]
+    z_str = bx_data[:8]
+    bx_data = bx_data[8:]
+
+    if(len(x_str) > 7):
+      x = struct.unpack("!f",stringSwap(x_str[:8]).decode('hex'))[0]
+    else:
+      x = 'miss'
+
+    if(len(y_str) > 7):
+      y = struct.unpack("!f",stringSwap(y_str[:8]).decode('hex'))[0]
+    else:
+      y = 'miss'
+
+    if(len(z_str) > 7):
+      z = struct.unpack("!f",stringSwap(z_str[:8]).decode('hex'))[0]
+    else:
+      z = 'miss'
+
+    pos = [x, y, z]
+
+    return pos
 
   def getToolTransformations(self):
 
@@ -431,6 +449,15 @@ class PolarisDriver:
     # Get CRC
     string = self.serial.read(2)
     return response
+
+  def BX(self, reply_option):
+    self.serial.write('BX '+str(reply_option)+'\r')
+
+    start_sqn = self.serial.read(64)
+    pos = self.serial.read(24)
+    crc = self.serial.read(8)
+    # print start_sqn + pos + crc
+    return start_sqn + pos + crc
 
   def _comm(self, baud_rate, data_bits, parity, stop_bits, hardware_handshaking):
     self.serial.write('COMM '+str(baud_rate)+str(data_bits)+str(parity)+str(stop_bits)+str(hardware_handshaking)+'\r')
@@ -631,7 +658,128 @@ class PolarisDriver:
     elif response[:5] == 'RESET':
       raise CommandError(command,'01')
     else:
-      return    
+      return
+
+  #######################
+  #  HIGHER LEVEL FUNCTION
+  #######################
+
+  def initStrayMarkerTracker(self):
+    verbose = False
+    if verbose == True:
+      print self._ver("4")
+      print self._comm("7", "0", "0", "0", "1")
+      print self._ver("5")
+      print self._getinfo("Config.*")
+      print self._get("Device.*")
+      print self._init()
+      print self._phsr("00")
+      print self._getinfo("Param.Tracking.*")
+      print self._getinfo("Features.Firmware.Version")
+      print self._getinfo("Info.Status.Alerts")
+      print self._getinfo("Info.Status.New Alerts")
+      print self._getinfo("Features.Hardware.Serial Number")
+      print self._ver("4")
+      print self._getinfo("Features.Tools.*")
+      print self._sflist("03")
+      print self._getinfo("Param.Tracking.Selected Volume")
+      print self._getinfo("SCU-0.Info.Status.New Alerts")
+      print self._getinfo("SCU-0.Info.Status.Alerts")
+      print self._phinf("01","0075")
+      print self._getinfo("Info.Status.New Alerts")
+      print self._getinfo("Info.Status.Alerts")
+      print self._getinfo("STB-0.Info.Status.New Alerts")
+      print self._getinfo("STB-0.Info.Status.Alerts")
+
+      print self._tstart('80')
+      print self.getPositionFromBX("1801")
+      print self._tstop()
+
+      print self._set("PS-0.Param.Tracking.Illuminator Rate","2")
+      print self._phrq("********", "*", "1", "****")
+      print self._pvwr("02", "0000", "4E444900D2110000010000000000000100000000031480345A00000004000000040000000000403F000000000000000000000000000000000000000000000000") 
+      print self._pvwr("02", "0040", "00002041000000000000000000000000000000000000000052B8E4417B14244200000000000000000000B04200000000AE4731C2CDCC21420000000000000000") 
+      print self._pvwr("02", "0080", "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") 
+      print self._pvwr("02", "00C0", "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") 
+      print self._pvwr("02", "0100", "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000803F00000000") 
+      print self._pvwr("02", "0140", "000000000000803F00000000000000000000803F00000000000000000000803F0000000000000000000000000000000000000000000000000000000000000000") 
+      print self._pvwr("02", "0180", "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") 
+      print self._pvwr("02", "01C0", "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") 
+      print self._pvwr("02", "0200", "0000000000000000000000000000000000000000000000000000000000000000000000000000000000010203000000000000000000000000000000001F1F1F1F") 
+      print self._pvwr("02", "0240", "090000004E4449000000000000000000383730303333390000000000000000000000000009010101010000000000000000000000000000000001010101000000") 
+      print self._pvwr("02", "0280", "000000000000000000000000008000290000000000000000000080BF000000000000000000000000000000000000000000000000000000000000000000000000") 
+      print self._pvwr("02", "02C0", "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") 
+      print self._pinit("02")
+      print self._phinf("02", "0075")
+
+      print self._tstart('80')
+      print self.getPositionFromBX('1803')
+      print self._tstop()
+
+      print self._pena("02", "D")
+
+      print self._tstart('80')
+    else:
+      print "Restarting system..."
+      self._ver("4")
+      self._comm("7", "0", "0", "0", "1")
+      self._ver("5")
+      self._getinfo("Config.*")
+      self._get("Device.*")
+
+      print "Starting system..."
+      self._init()
+      self._phsr("00")
+      self._getinfo("Param.Tracking.*")
+      self._getinfo("Features.Firmware.Version")
+      self._getinfo("Info.Status.Alerts")
+      self._getinfo("Info.Status.New Alerts")
+      self._getinfo("Features.Hardware.Serial Number")
+      self._ver("4")
+      self._getinfo("Features.Tools.*")
+      self._sflist("03")
+      self._getinfo("Param.Tracking.Selected Volume")
+      self._getinfo("SCU-0.Info.Status.New Alerts")
+      self._getinfo("SCU-0.Info.Status.Alerts")
+      self._phinf("01","0075")
+      self._getinfo("Info.Status.New Alerts")
+      self._getinfo("Info.Status.Alerts")
+      self._getinfo("STB-0.Info.Status.New Alerts")
+      self._getinfo("STB-0.Info.Status.Alerts")
+      
+      print "Starting passive tool handle..."
+      self._tstart('80')
+      self.getPositionFromBX("1801")
+      self._tstop()
+
+      self._set("PS-0.Param.Tracking.Illuminator Rate","2")
+      self._phrq("********", "*", "1", "****")
+      self._pvwr("02", "0000", "4E444900D2110000010000000000000100000000031480345A00000004000000040000000000403F000000000000000000000000000000000000000000000000") 
+      self._pvwr("02", "0040", "00002041000000000000000000000000000000000000000052B8E4417B14244200000000000000000000B04200000000AE4731C2CDCC21420000000000000000") 
+      self._pvwr("02", "0080", "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") 
+      self._pvwr("02", "00C0", "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") 
+      self._pvwr("02", "0100", "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000803F00000000") 
+      self._pvwr("02", "0140", "000000000000803F00000000000000000000803F00000000000000000000803F0000000000000000000000000000000000000000000000000000000000000000") 
+      self._pvwr("02", "0180", "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") 
+      self._pvwr("02", "01C0", "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") 
+      self._pvwr("02", "0200", "0000000000000000000000000000000000000000000000000000000000000000000000000000000000010203000000000000000000000000000000001F1F1F1F") 
+      self._pvwr("02", "0240", "090000004E4449000000000000000000383730303333390000000000000000000000000009010101010000000000000000000000000000000001010101000000") 
+      self._pvwr("02", "0280", "000000000000000000000000008000290000000000000000000080BF000000000000000000000000000000000000000000000000000000000000000000000000") 
+      self._pvwr("02", "02C0", "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") 
+      self._pinit("02")
+      self._phinf("02", "0075") 
+
+      print "Enabling tool..."
+      self._tstart('80')
+      self.getPositionFromBX('1803')
+      self._tstop()
+
+      self._pena("02", "D")
+
+      print "Start!"
+      self._tstart('80')
+
+    return
 
 
 ##############################################################################
@@ -652,10 +800,3 @@ class CommandError(Exception):
 
   def __str__(self):
     return 'CommandError: ' + self.msg + ' when calling command ' + self.command
-
-##############################################################################
-#                          RUNNING THE MAIN ROUTINE
-############################################################################## 
-
-if __name__ == '__main__':
-  main()
