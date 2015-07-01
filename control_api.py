@@ -38,7 +38,7 @@ Polaris/RoboRoach API for Ubuntu 14.04 LTS
 ##############################################################################
 #                                IMPORTS
 ##############################################################################
-from gattlib import GATTRequester
+from gattlib import GATTRequester, GATTResponse
 import time
 
 import serial
@@ -65,19 +65,19 @@ class RoboRoach:
   #  API Constants
   #######################
 
-  ROBOROACH_FREQUENCY_HANDLE  = 0x002A
-  ROBOROACH_PULSE_WIDTH       = 0x002cD
-  ROBOROACH_NUM_PULSES        = 0x0030
-  ROBOROACH_RANDOM_MODE       = 0x0033
-  ROBOROACH_RIGHT_HANDLE      = 0x0036
-  ROBOROACH_LEFT_HANDLE       = 0x0039
-  ROBOROACH_GAIN              = 0x003C
-  ROBOROACH_FREQ_MIN          = 0x003F
-  ROBOROACH_FREQ_MAX          = 0x0042
-  ROBOROACH_PW_MIN            = 0x0045
-  ROBOROACH_PW_MAX            = 0x0048
-  ROBOROACH_GAIN_MIN          = 0x004B
-  ROBOROACH_GAIN_MAX          = 0x004E
+  ROBOROACH_FREQUENCY_HANDLE         = 0x002A
+  ROBOROACH_PULSE_WIDTH_HANDLE       = 0x002D
+  ROBOROACH_NUM_PULSES_HANDLE        = 0x0030
+  ROBOROACH_RANDOM_MODE              = 0x0033
+  ROBOROACH_RIGHT_HANDLE             = 0x0036
+  ROBOROACH_LEFT_HANDLE              = 0x0039
+  ROBOROACH_GAIN_HANDLE              = 0x003C
+  ROBOROACH_MIN_FREQ_HANDLE          = 0x003F
+  ROBOROACH_MAX_FREQ_HANDLE          = 0x0042
+  ROBOROACH_MIN_PW_HANDLE            = 0x0045
+  ROBOROACH_MAX_PW_HANDLE            = 0x0048
+  ROBOROACH_MIN_GAIN_HANDLE          = 0x004B
+  ROBOROACH_MAX_GAIN_HANDLE          = 0x004E
 
   #######################
   #  CONSTRUCTOR
@@ -86,6 +86,27 @@ class RoboRoach:
   def __init__(self, mac_address):
     self.mac_address = mac_address
     self.req = GATTRequester(mac_address)
+
+    self._set_min_freq(0x0A)
+    self._set_max_freq(0X46)
+
+    self._set_min_pw(0x01)
+    self._set_max_pw(0x14)
+
+    self._set_min_gain(0x0A)
+    self._set_max_gain(0x46)
+
+  #######################
+  #  AUXILIAR FUNCTIONS
+  #######################
+  def read_async(self, handle):
+    response = GATTResponse()
+
+    self.req.read_by_handle_async(handle, response)
+    while not response.received():
+      time.sleep(0.1)
+
+    return response.received()[0]
 
   #######################
   #  COMMON FUNCTIONS
@@ -98,6 +119,89 @@ class RoboRoach:
       self.req.write_by_handle(self.ROBOROACH_RIGHT_HANDLE, str(bytearray([1])))
     else:
       print "Unknown direction"
+
+  def _rand(self, random):
+    if random == True:
+      self.req.write_by_handle(self.ROBOROACH_RANDOM_MODE, str(bytearray([1])))
+    else:
+      self.req.write_by_handle(self.ROBOROACH_RANDOM_MODE, str(bytearray([0])))
+
+  def _set_freq(self, frequency):
+    self.req.write_by_handle(self.ROBOROACH_FREQUENCY_HANDLE, str(bytearray([frequency])))
+
+  def _get_freq(self):
+    freq = self.read_async(self.ROBOROACH_FREQUENCY_HANDLE)
+    return freq.encode('hex')
+
+  def _set_pw(self, pulse_width):
+    self.req.write_by_handle(self.ROBOROACH_PULSE_WIDTH_HANDLE, str(bytearray([pulse_width])))
+
+  def _get_pw(self):
+    pulse_width = self.read_async(self.ROBOROACH_PULSE_WIDTH_HANDLE)
+    return pulse_width.encode('hex')
+
+  def _set_gain(self, gain):
+    self.req.write_by_handle(self.ROBOROACH_GAIN_HANDLE, str(bytearray([gain])))
+
+  def _get_gain(self):
+    gain = self.read_async(self.ROBOROACH_GAIN_HANDLE)
+    return gain.encode('hex')
+
+  def _set_min_freq(self, freq):
+    self.req.write_by_handle(self.ROBOROACH_MIN_FREQ_HANDLE, str(bytearray([freq])))
+
+  def _set_max_freq(self, freq):
+    self.req.write_by_handle(self.ROBOROACH_MAX_FREQ_HANDLE, str(bytearray([freq])))
+
+  def _get_min_freq(self):
+    min_freq = self.read_async(self.ROBOROACH_MIN_FREQ_HANDLE)
+    return min_freq.encode('hex')
+
+  def _get_max_freq(self):
+    max_freq = self.read_async(self.ROBOROACH_MAX_FREQ_HANDLE)
+    return max_freq.encode('hex')
+
+  def _set_min_pw(self, pulse_width):
+    self.req.write_by_handle(self.ROBOROACH_MIN_PW_HANDLE, str(bytearray([pulse_width])))
+
+  def _set_max_pw(self, pulse_width):
+    self.req.write_by_handle(self.ROBOROACH_MAX_PW_HANDLE, str(bytearray([pulse_width])))
+
+  def _get_min_pw(self):
+    min_freq = self.read_async(self.ROBOROACH_MIN_PW_HANDLE)
+    return min_freq.encode('hex')
+
+  def _get_max_pw(self):
+    max_freq = self.read_async(self.ROBOROACH_MAX_PW_HANDLE)
+    return max_freq.encode('hex')
+
+  def _set_min_gain(self, gain):
+    self.req.write_by_handle(self.ROBOROACH_MIN_GAIN_HANDLE, str(bytearray([gain])))
+
+  def _set_max_gain(self, gain):
+    self.req.write_by_handle(self.ROBOROACH_MAX_GAIN_HANDLE, str(bytearray([gain])))
+
+  def _get_min_gain(self):
+    min_gain = self.read_async(self.ROBOROACH_MIN_GAIN_HANDLE)
+    return min_gain.encode('hex')
+
+  def _get_max_gain(self):
+    max_gain = self.read_async(self.ROBOROACH_MAX_GAIN_HANDLE)
+    return max_gain.encode('hex')
+
+  # Need more testing:
+  def _set_np(self, num_pulses):
+    self.req.write_by_handle(self.ROBOROACH_NUM_PULSES_HANDLE, str(bytearray([num_pulses])))     
+
+  def _get_np(self):
+    response = GATTResponse()
+
+    self.req.read_by_handle_async(self.ROBOROACH_NUM_PULSES_HANDLE, response)
+    while not response.received():
+        time.sleep(0.1)
+
+    num_pulses = response.received()[0]
+    return num_pulses.encode('hex')
 
 ##############################################################################
 #                            CLASS PortHandler

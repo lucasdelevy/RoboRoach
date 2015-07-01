@@ -59,7 +59,7 @@ __license__ = "LGPL"
 def main():
 
   # Initialize PolarisDriver object
-  polaris_driver = PolarisDriver(port='/dev/ttyUSB1')  
+  polaris_driver = PolarisDriver(port='/dev/ttyUSB0')  
 
   print 'Opening serial port...'
   polaris_driver.open()
