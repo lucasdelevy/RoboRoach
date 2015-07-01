@@ -38,43 +38,41 @@ print("Initialized")
 ####### CALIBRATION
 ##########################
 
-print("Starting calibration... (press <enter> to finish)")
-pos = []
-while True:
-	rlist, _, _, = sel([sys.stdin],[],[],0.01)    
-	if rlist:
-		break
+print("Starting calibration... (press <Ctrl-C> to finish)")
+ref_pos = []
+try:
+	while True:
+		pos = polaris_driver.getPositionFromBX("1801")
+		if not 'miss' in pos:
+			ref_pos.append(pos)
 
-	pos = polaris_driver.getPositionFromBX("1801")
-	if not 'miss' in pos
-	pos.append(pos)
-
-	time.sleep(1);
-ref_pos = np.mean(pos[1:], axis=0)
-print("Position: ["+str(ref_pos[0])+", "+str(ref_pos[1])+", "+str(ref_pos[2])+"]")
+		time.sleep(0.1);
+except KeyboardInterrupt:
+	pass
+ref_pos = np.mean(ref_pos[1:], axis=0)
+print("\nPosition: ["+str(ref_pos[0])+", "+str(ref_pos[1])+", "+str(ref_pos[2])+"]")
 print("Calibrated")
 
 ##########################
 ####### CONTROL
 ##########################
 
-print("Line follower started!")
-POS_THRESH_POS = 10
-POS_THRESH_NEG = -10
-while True:
-	rlist, _, _, = sel([sys.stdin],[],[],0.01)    
-	if rlist:
-		break
+print("Line follower started! (press <Ctrl-C> to finish)")
+POS_THRESH_POS = 1.5
+POS_THRESH_NEG = -1.5
+try:
+	while True:
+		pos = polaris_driver.getPositionFromBX("1801")
+		if not 'miss' in pos:
+			if pos[0] - ref_pos[0] > POS_THRESH_POS:
+				roboroach._turn("right")
+			elif pos[0] - ref_pos[0] < POS_THRESH_NEG:
+				roboroach._turn("left")	
 
-	pos = polaris_driver.getPositionFromBX("1801")
-	if not 'miss' in pos:
-		if pos[0] - ref_pos[0] > POS_THRESH_POS:
-			roboroach._turn("right")
-		elif pos[0] - ref_pos[0] < POS_THRESH_NEG:
-			roboroach._turn("left")	
-
-	time.sleep(1);
-print("End of control")
+		time.sleep(0.1);
+except KeyboardInterrupt:
+	pass
+print("\nEnd of control")
 
 print("Finishing tracker...")
 polaris_driver.stopTracking()
